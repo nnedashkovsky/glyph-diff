@@ -69,6 +69,13 @@ button{font-family:inherit;}
 .slot-info .fam{font-weight:600; font-size:15px;}
 .slot-info .meta{color:var(--ink-muted); font-family:var(--font-mono); font-size:12.5px; display:flex; gap:10px; flex-wrap:wrap;}
 .slot-error{color:var(--accent-b); font-size:13px;}
+.var-panel{display:flex; flex-direction:column; gap:7px; padding-top:10px; border-top:1px dashed var(--line);}
+.var-row{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-muted);}
+.var-row .var-label{flex:0 0 auto; min-width:60px; max-width:60px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.var-row select.var-select{flex:1; min-width:0; font-family:inherit; font-size:12.5px; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:6px; padding:4px 6px;}
+.var-row input[type=range]{flex:1; min-width:0; accent-color:var(--accent-a);}
+.slot[data-slot="b"] .var-row input[type=range]{accent-color:var(--accent-b);}
+.var-row .var-value{flex:0 0 auto; width:42px; text-align:right; font-family:var(--font-mono); color:var(--ink); font-variant-numeric:tabular-nums;}
 .swap-btn{align-self:center; width:38px; height:38px; border-radius:50%; border:1px solid var(--line); background:var(--panel); color:var(--ink-muted); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow);}
 .swap-btn:hover{color:var(--ink); border-color:var(--accent-a);}
 
@@ -180,6 +187,7 @@ footer.note a{color:inherit;}
       </label>
       <input type="file" id="fileInputA" accept=".ttf,.otf,.woff,font/ttf,font/otf,font/woff" hidden>
       <div class="slot-info" id="infoA"></div>
+      <div class="var-panel" id="varA" hidden></div>
       <div class="slot-error" id="errA" hidden></div>
     </div>
     <button class="swap-btn" id="swapBtn" title="Swap A and B">⇄</button>
@@ -191,6 +199,7 @@ footer.note a{color:inherit;}
       </label>
       <input type="file" id="fileInputB" accept=".ttf,.otf,.woff,font/ttf,font/otf,font/woff" hidden>
       <div class="slot-info" id="infoB"></div>
+      <div class="var-panel" id="varB" hidden></div>
       <div class="slot-error" id="errB" hidden></div>
     </div>
   </div>
@@ -272,7 +281,7 @@ footer.note a{color:inherit;}
   <footer class="note">Font files are parsed locally in your browser (opentype.js) and never leave your machine. .woff2 may fail to load — convert it to .ttf/.otf/.woff first.</footer>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/opentype.js/1.3.4/opentype.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/opentype.js@2.0.0/dist/opentype.min.js"></script>
 <script>
 (function(){
 "use strict";
@@ -336,7 +345,23 @@ function fontLabel(slot){
   const font = state.fonts[slot];
   if (!font) return slot === 'a' ? 'Font A' : 'Font B';
   const meta = state.meta[slot];
-  return fontDisplayName(font, meta ? meta.fileName : (slot === 'a' ? 'A' : 'B'));
+  let label = fontDisplayName(font, meta ? meta.fileName : (slot === 'a' ? 'A' : 'B'));
+  if (font.variation) label += ' — ' + currentInstanceLabel(font);
+  return label;
+}
+
+function resolveName(nameObj){
+  if (!nameObj) return '';
+  return nameObj.en || Object.values(nameObj)[0] || '';
+}
+
+function currentInstanceLabel(font){
+  const idx = font.variation.getInstanceIndex(font.variation.get());
+  if (idx > -1){
+    const inst = font.variation.getInstance(idx);
+    return resolveName(inst && inst.name) || ('Instance ' + (idx+1));
+  }
+  return 'Custom';
 }
 
 function updateLegend(){
@@ -375,6 +400,7 @@ function renderSlot(slot){
     dz.innerHTML = '<svg class="glyph-icon" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 20V4h9l4 4v12z"/><path d="M15 4v4h4"/></svg>Drop a file here or <b>choose one</b><br>.ttf · .otf · .woff';
     info.classList.remove('show');
     clearBtn.hidden = true;
+    renderVariationPanel(slot);
     return;
   }
   const meta = state.meta[slot];
@@ -390,6 +416,93 @@ function renderSlot(slot){
   parts.forEach(p => { const s=document.createElement('span'); s.textContent=p; m1.appendChild(s); });
   info.appendChild(fam); info.appendChild(m1);
   clearBtn.hidden = false;
+  renderVariationPanel(slot);
+}
+
+function renderVariationPanel(slot){
+  const font = state.fonts[slot];
+  const box = $(slot === 'a' ? 'varA' : 'varB');
+  box.innerHTML = '';
+  if (!font || !font.variation){ box.hidden = true; return; }
+  box.hidden = false;
+
+  const fvar = font.tables.fvar;
+  const sliders = {};
+
+  const instRow = document.createElement('div'); instRow.className = 'var-row';
+  const instLabel = document.createElement('span'); instLabel.className = 'var-label'; instLabel.textContent = 'Instance';
+  const select = document.createElement('select'); select.className = 'var-select';
+  fvar.instances.forEach((inst, i) => {
+    const opt = document.createElement('option'); opt.value = String(i);
+    opt.textContent = resolveName(inst.name) || ('Instance ' + (i+1));
+    select.appendChild(opt);
+  });
+  const customOpt = document.createElement('option'); customOpt.value = 'custom'; customOpt.textContent = 'Custom'; customOpt.hidden = true;
+  select.appendChild(customOpt);
+  instRow.appendChild(instLabel); instRow.appendChild(select);
+  box.appendChild(instRow);
+
+  fvar.axes.forEach(axis => {
+    const row = document.createElement('div'); row.className = 'var-row';
+    const label = document.createElement('span'); label.className = 'var-label'; label.textContent = resolveName(axis.name) || axis.tag;
+    const slider = document.createElement('input'); slider.type = 'range';
+    slider.min = axis.minValue; slider.max = axis.maxValue;
+    const step = (axis.maxValue - axis.minValue) > 20 ? 1 : 0.01;
+    slider.step = step;
+    const valSpan = document.createElement('span'); valSpan.className = 'var-value';
+    row.appendChild(label); row.appendChild(slider); row.appendChild(valSpan);
+    box.appendChild(row);
+    sliders[axis.tag] = {slider, valSpan, step};
+  });
+
+  function syncFromCurrent(){
+    const cur = font.variation.get();
+    for (const tag in sliders){
+      const {slider, valSpan, step} = sliders[tag];
+      const v = cur[tag] != null ? cur[tag] : 0;
+      slider.value = v;
+      valSpan.textContent = fmt(v, step === 1 ? 0 : 2);
+    }
+    const idx = font.variation.getInstanceIndex(cur);
+    customOpt.hidden = idx > -1;
+    select.value = idx > -1 ? String(idx) : 'custom';
+  }
+  syncFromCurrent();
+
+  select.addEventListener('change', () => {
+    if (select.value === 'custom') return;
+    font.variation.set(parseInt(select.value, 10));
+    syncFromCurrent();
+    refreshComparison();
+  });
+
+  for (const tag in sliders){
+    const {slider, valSpan, step} = sliders[tag];
+    slider.addEventListener('input', () => {
+      valSpan.textContent = fmt(+slider.value, step === 1 ? 0 : 2);
+      font.variation.set({[tag]: +slider.value});
+      const idx = font.variation.getInstanceIndex(font.variation.get());
+      customOpt.hidden = idx > -1;
+      select.value = idx > -1 ? String(idx) : 'custom';
+      queueVariationChange();
+    });
+  }
+}
+
+let variationDebounce;
+function queueVariationChange(){
+  clearTimeout(variationDebounce);
+  variationDebounce = setTimeout(refreshComparison, 90);
+}
+
+function refreshComparison(){
+  if (!(state.fonts.a && state.fonts.b)) return;
+  state.cache.clear();
+  state.inkFrame = computeInkFrame();
+  renderGrid();
+  renderDetail();
+  renderSummary();
+  updateLegend();
 }
 
 function clearSlot(slot){
@@ -427,7 +540,7 @@ function analyzeGlyph(font, ch){
   const glyph = font.charToGlyph(ch);
   if (!glyph || idx === 0) return {missing:true};
   const scale = DISPLAY_EM / font.unitsPerEm;
-  const path = glyph.getPath(0, 0, DISPLAY_EM);
+  const path = glyph.getPath(0, 0, DISPLAY_EM, undefined, font);
   const cmds = path.commands || [];
   const F = n => Math.round(n*100)/100;
   let d = '';

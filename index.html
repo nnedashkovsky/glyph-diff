@@ -1,0 +1,976 @@
+<title>Glyph Diff</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#eeece4; --panel:#f6f4ec; --panel-2:#e4dfd0; --line:#d5cdb9;
+  --ink:#211d17; --ink-muted:#6e6656; --ink-faint:#948b78;
+  --accent-a:#2451c7; --accent-b:#c62d2d;
+  --good:#3f7d4a; --warn:#a8660a;
+  --paper:#ffffff;
+  --focus:#2451c7;
+  --shadow: 0 1px 2px rgba(33,29,23,.06), 0 8px 24px -12px rgba(33,29,23,.25);
+  --font-display:'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --font-body:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:'IBM Plex Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15130e; --panel:#1d1911; --panel-2:#262019; --line:#3a3225;
+    --ink:#efe9db; --ink-muted:#a89d87; --ink-faint:#786f5c;
+    --accent-a:#6f96ff; --accent-b:#ff7266;
+    --good:#5db06c; --warn:#e0a83e;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15130e; --panel:#1d1911; --panel-2:#262019; --line:#3a3225;
+  --ink:#efe9db; --ink-muted:#a89d87; --ink-faint:#786f5c;
+  --accent-a:#6f96ff; --accent-b:#ff7266;
+  --good:#5db06c; --warn:#e0a83e;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body);
+  padding:28px 16px 64px; min-height:100vh;
+}
+.wrap{max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:28px;}
+h1,h2,h3{margin:0; text-wrap:balance;}
+button{font-family:inherit;}
+:focus-visible{outline:2.5px solid var(--focus); outline-offset:2px;}
+@media (prefers-reduced-motion:no-preference){
+  .cell, .btn, .seg button{transition:background .12s ease, border-color .12s ease, transform .12s ease;}
+}
+
+/* ---- hero ---- */
+.hero{display:flex; flex-direction:column; gap:6px;}
+.hero-row{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;}
+.hero h1{font-family:var(--font-display); font-weight:400; font-size:clamp(32px,5vw,46px); letter-spacing:.2px;}
+.hero .mark{display:inline-flex; align-items:center; gap:2px; font-family:var(--font-mono); font-size:15px; padding:3px 9px; border-radius:20px; background:var(--panel-2); border:1px solid var(--line); color:var(--ink-muted);}
+.hero .mark b.a{color:var(--accent-a);} .hero .mark b.b{color:var(--accent-b);}
+.hero p{margin:0; max-width:62ch; color:var(--ink-muted); font-size:15px; line-height:1.5;}
+
+/* ---- font loader slots ---- */
+.loader{display:grid; grid-template-columns:1fr auto 1fr; gap:14px; align-items:stretch;}
+@media (max-width:680px){ .loader{grid-template-columns:1fr;} .swap-btn{justify-self:center;} }
+.slot{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:10px; min-width:0;}
+.slot-head{display:flex; align-items:center; gap:8px;}
+.dot{width:11px; height:11px; border-radius:50%; flex:none;}
+.dot.a{background:var(--accent-a);} .dot.b{background:var(--accent-b);}
+.slot-head b{font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-muted);}
+.slot-clear{margin-left:auto; border:none; background:none; color:var(--ink-faint); cursor:pointer; font-size:13px; padding:2px 6px; border-radius:6px;}
+.slot-clear:hover{background:var(--panel-2); color:var(--ink);}
+.dropzone{border:1.5px dashed var(--line); border-radius:10px; padding:18px 14px; text-align:center; cursor:pointer; color:var(--ink-muted); font-size:14px;}
+.dropzone:hover, .dropzone.drag{border-color:var(--accent-a); background:var(--panel-2); color:var(--ink);}
+.dropzone .glyph-icon{display:block; margin:0 auto 8px; opacity:.55;}
+.dropzone b{color:var(--ink);}
+.slot-info{display:none; flex-direction:column; gap:4px; font-size:13.5px;}
+.slot-info.show{display:flex;}
+.slot-info .fam{font-weight:600; font-size:15px;}
+.slot-info .meta{color:var(--ink-muted); font-family:var(--font-mono); font-size:12.5px; display:flex; gap:10px; flex-wrap:wrap;}
+.slot-error{color:var(--accent-b); font-size:13px;}
+.swap-btn{align-self:center; width:38px; height:38px; border-radius:50%; border:1px solid var(--line); background:var(--panel); color:var(--ink-muted); cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow);}
+.swap-btn:hover{color:var(--ink); border-color:var(--accent-a);}
+
+/* ---- controls ---- */
+[hidden]{display:none !important;}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow);}
+.controls{display:flex; flex-direction:column; gap:14px;}
+.text-row{display:flex; flex-direction:column; gap:8px;}
+.text-row textarea{width:100%; resize:vertical; min-height:64px; font-family:var(--font-mono); font-size:14px; padding:10px 12px; border-radius:9px; border:1px solid var(--line); background:var(--bg); color:var(--ink); line-height:1.5;}
+.presets{display:flex; gap:7px; flex-wrap:wrap;}
+.btn{border:1px solid var(--line); background:var(--panel-2); color:var(--ink); font-size:12.5px; padding:6px 11px; border-radius:20px; cursor:pointer;}
+.btn:hover{border-color:var(--accent-a); color:var(--accent-a);}
+.opt-row{display:flex; flex-wrap:wrap; gap:18px; align-items:center; padding-top:4px; border-top:1px solid var(--line); font-size:13.5px;}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden;}
+.seg button{border:none; background:var(--bg); color:var(--ink-muted); padding:7px 13px; font-size:13px; cursor:pointer; border-right:1px solid var(--line);}
+.seg button:last-child{border-right:none;}
+.seg button.active{background:var(--accent-a); color:#fff;}
+.opt{display:flex; align-items:center; gap:6px; color:var(--ink-muted); cursor:pointer; user-select:none;}
+.opt input{accent-color:var(--accent-a);}
+.opt-row select{font-family:inherit; font-size:13px; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:7px; padding:5px 8px;}
+.slider-wrap{display:flex; align-items:center; gap:8px; color:var(--ink-muted); font-size:13px;}
+.slider-wrap input[type=range]{accent-color:var(--accent-a);}
+
+/* ---- grid ---- */
+.gridwrap{display:flex; flex-direction:column; gap:10px;}
+.gridwrap .label-row{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+.gridwrap .label-row h2{font-family:var(--font-display); font-weight:400; font-size:21px;}
+.gridwrap .label-row span{font-size:12.5px; color:var(--ink-faint); font-family:var(--font-mono);}
+.grid{display:flex; flex-wrap:wrap; gap:12px; background:var(--panel-2); border:1px solid var(--line); border-radius:14px; padding:14px; max-height:600px; overflow-y:auto;}
+.cell{position:relative; width:116px; height:138px; flex:none; border:1.5px solid var(--line); background:var(--paper); border-radius:11px; cursor:pointer; padding:0; display:flex; flex-direction:column; align-items:stretch; overflow:hidden;}
+.cell:hover{border-color:var(--accent-a);}
+.cell.selected{border-color:var(--accent-a); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent-a) 35%, transparent);}
+.cell-svg{width:100%; height:100px; display:block;}
+.cell-label{font-family:var(--font-mono); font-size:15px; color:var(--ink-muted); text-align:center; line-height:1; padding:6px 0 7px; background:var(--panel); border-top:1px solid var(--line);}
+.cell-badge{position:absolute; top:5px; right:5px; font-family:var(--font-mono); font-size:11px; padding:2px 6px; border-radius:7px; background:var(--panel); color:var(--ink-muted); border:1px solid var(--line); line-height:1.4;}
+.cell-badge.good{color:var(--good); border-color:var(--good);}
+.cell-badge.high{color:var(--accent-b); border-color:var(--accent-b);}
+.cell-badge.warn{color:#fff; background:var(--warn); border-color:var(--warn); font-weight:600;}
+.empty-hint{color:var(--ink-faint); font-size:13.5px; padding:20px 8px; text-align:center;}
+
+/* ---- detail ---- */
+.detail{display:grid; grid-template-columns:1.4fr 1fr; gap:18px; align-items:start;}
+@media (max-width:800px){ .detail{grid-template-columns:1fr;} }
+.detail-head{display:flex; align-items:center; gap:12px; margin-bottom:6px; flex-wrap:wrap;}
+.detail-fonts{display:flex; gap:18px; flex-wrap:wrap; font-size:13px; color:var(--ink-muted); margin-bottom:12px;}
+.detail-fonts .dfont{display:inline-flex; align-items:center; gap:7px;}
+.detail-fonts .name{font-weight:600;}
+.detail-fonts .dot{width:9px; height:9px;}
+.detail-char{font-family:var(--font-mono); font-size:26px; background:var(--panel-2); border:1px solid var(--line); border-radius:9px; padding:4px 14px; min-width:1.4em; text-align:center;}
+.detail-cp{font-family:var(--font-mono); font-size:12.5px; color:var(--ink-faint);}
+.diffstat{margin-left:auto; text-align:right;}
+.diffstat .num{font-family:var(--font-mono); font-size:22px; font-weight:600; font-variant-numeric:tabular-nums;}
+.diffstat .num.good{color:var(--good);} .diffstat .num.bad{color:var(--accent-b);}
+.diffstat .cap{font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.07em;}
+.canvas-toolbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:8px;}
+.zoom-btns{display:inline-flex; gap:4px;}
+.zoom-btns button{width:26px; height:26px; border-radius:6px; border:1px solid var(--line); background:var(--panel-2); color:var(--ink); cursor:pointer; font-size:14px; line-height:1;}
+.canvas-frame{background:var(--panel-2); border-radius:12px; padding:16px; border:1px solid var(--line);}
+.paper-sheet{background:var(--paper); border-radius:6px; box-shadow:var(--shadow); overflow:hidden; touch-action:none;}
+.glyph-svg{width:100%; height:auto; display:block; aspect-ratio:1.15/1; cursor:grab;}
+.glyph-svg:active{cursor:grabbing;}
+.side-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.side-grid .side-label{font-family:var(--font-mono); font-size:11.5px; text-align:center; color:var(--ink-muted); margin-bottom:4px;}
+.missing-note{padding:14px; text-align:center; color:var(--ink-muted); font-size:13.5px; background:var(--panel-2); border-radius:10px; border:1px dashed var(--line);}
+
+/* ---- metrics table ---- */
+.metrics{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel-2);}
+.metrics-scroll{overflow-x:auto;}
+table.mt{border-collapse:collapse; width:100%; font-size:13px; font-family:var(--font-mono); min-width:420px;}
+table.mt th{text-align:left; font-family:var(--font-body); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:600; padding:9px 10px; border-bottom:1px solid var(--line);}
+table.mt td{padding:7px 10px; border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums; white-space:nowrap;}
+table.mt tr:last-child td{border-bottom:none;}
+table.mt td.k{font-family:var(--font-body); color:var(--ink-muted); white-space:normal;}
+table.mt td.a{color:var(--accent-a);} table.mt td.b{color:var(--accent-b);}
+table.mt td.d{color:var(--ink);}
+table.mt td.d.flag{color:var(--warn); font-weight:600;}
+
+/* ---- summary ---- */
+.summary{display:flex; flex-wrap:wrap; gap:22px; align-items:center;}
+.summary .stat{display:flex; flex-direction:column; gap:2px;}
+.summary .stat .n{font-family:var(--font-mono); font-size:19px; font-weight:600; font-variant-numeric:tabular-nums;}
+.summary .stat .l{font-size:11.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em;}
+.summary .stat .n.warn{color:var(--warn);}
+.summary button.btn{margin-left:auto;}
+
+.legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--ink-muted); align-items:center;}
+.legend span{display:inline-flex; align-items:center; gap:6px;}
+.legend i{width:12px; height:12px; border-radius:3px; display:inline-block;}
+
+footer.note{color:var(--ink-faint); font-size:12.5px; text-align:center; line-height:1.6;}
+footer.note a{color:inherit;}
+</style>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="hero-row">
+      <h1>Glyph Diff</h1>
+      <span class="mark"><b class="a">A</b>·<b class="b">B</b> overlay</span>
+    </div>
+    <p>Load two font files — they're parsed right in your browser, nothing is sent to a server. The tool overlays matching characters on top of each other and shows where outlines, nodes, and metrics don't line up.</p>
+  </div>
+
+  <div class="loader">
+    <div class="slot" data-slot="a">
+      <div class="slot-head"><span class="dot a"></span><b>Font A</b><button class="slot-clear" id="clearA" hidden>Clear</button></div>
+      <label class="dropzone" id="dropA" for="fileInputA">
+        <svg class="glyph-icon" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 20V4h9l4 4v12z"/><path d="M15 4v4h4"/></svg>
+        Drop a file here or <b>choose one</b><br>.ttf · .otf · .woff
+      </label>
+      <input type="file" id="fileInputA" accept=".ttf,.otf,.woff,font/ttf,font/otf,font/woff" hidden>
+      <div class="slot-info" id="infoA"></div>
+      <div class="slot-error" id="errA" hidden></div>
+    </div>
+    <button class="swap-btn" id="swapBtn" title="Swap A and B">⇄</button>
+    <div class="slot" data-slot="b">
+      <div class="slot-head"><span class="dot b"></span><b>Font B</b><button class="slot-clear" id="clearB" hidden>Clear</button></div>
+      <label class="dropzone" id="dropB" for="fileInputB">
+        <svg class="glyph-icon" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 20V4h9l4 4v12z"/><path d="M15 4v4h4"/></svg>
+        Drop a file here or <b>choose one</b><br>.ttf · .otf · .woff
+      </label>
+      <input type="file" id="fileInputB" accept=".ttf,.otf,.woff,font/ttf,font/otf,font/woff" hidden>
+      <div class="slot-info" id="infoB"></div>
+      <div class="slot-error" id="errB" hidden></div>
+    </div>
+  </div>
+
+  <div id="afterLoad" hidden style="display:flex; flex-direction:column; gap:28px;">
+    <div class="panel controls">
+      <div class="text-row">
+        <textarea id="compareText" spellcheck="false" rows="3"></textarea>
+        <div class="presets">
+          <button class="btn" data-preset="all">All</button>
+          <button class="btn" data-preset="latin">Latin</button>
+          <button class="btn" data-preset="cyr">Cyrillic</button>
+          <button class="btn" data-preset="digits">Digits &amp; punctuation</button>
+          <button class="btn" data-preset="clear">Clear</button>
+        </div>
+      </div>
+      <div class="opt-row">
+        <div class="seg" id="viewModeSeg">
+          <button data-mode="overlay" class="active">Overlay</button>
+          <button data-mode="blink">Blink</button>
+          <button data-mode="side">Side by side</button>
+        </div>
+        <label class="opt"><input type="checkbox" id="chkGuides" checked> guides</label>
+        <label class="opt"><input type="checkbox" id="chkNodes"> nodes</label>
+        <label class="opt"><input type="checkbox" id="chkOnlyDiff"> diffs only</label>
+        <div class="slider-wrap" id="opacityWrap">
+          opacity
+          <input type="range" id="opacitySlider" min="40" max="100" value="100">
+        </div>
+        <div class="slider-wrap" id="blinkWrap" hidden>
+          speed
+          <input type="range" id="blinkSlider" min="150" max="1200" value="500" step="50">
+        </div>
+        <select id="sortSelect" title="Sort order">
+          <option value="order">Input order</option>
+          <option value="diff">By difference</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="gridwrap">
+      <div class="label-row">
+        <h2>Characters</h2>
+        <span id="gridCount"></span>
+      </div>
+      <div class="grid" id="grid" tabindex="0"></div>
+    </div>
+
+    <div class="panel" id="detailPanel">
+      <div class="detail-head">
+        <span class="detail-char" id="dChar">A</span>
+        <span class="detail-cp" id="dCp">U+0041</span>
+        <div class="diffstat">
+          <div class="num" id="dDiffNum">—</div>
+          <div class="cap">outline difference</div>
+        </div>
+      </div>
+      <div class="detail-fonts" id="detailFonts"></div>
+      <div class="canvas-toolbar">
+        <div class="zoom-btns">
+          <button id="zoomOut" title="Zoom out">−</button>
+          <button id="zoomReset" title="Reset view">⊙</button>
+          <button id="zoomIn" title="Zoom in">+</button>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--accent-a)"></i>only <span id="legA">A</span></span>
+          <span><i style="background:var(--accent-b)"></i>only <span id="legB">B</span></span>
+          <span><i style="background:#2a2330"></i>both</span>
+        </div>
+      </div>
+      <div class="detail" id="detailBody"></div>
+    </div>
+
+    <div class="panel summary" id="summaryBar"></div>
+  </div>
+
+  <div class="empty-hint" id="preHint">Load both fonts to start comparing.</div>
+
+  <footer class="note">Font files are parsed locally in your browser (opentype.js) and never leave your machine. .woff2 may fail to load — convert it to .ttf/.otf/.woff first.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/opentype.js/1.3.4/opentype.min.js"></script>
+<script>
+(function(){
+"use strict";
+const DISPLAY_EM = 1000;
+const COLOR_A = '#2451c7', COLOR_B = '#c62d2d';
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+const state = {
+  fonts: {a:null, b:null},
+  meta: {a:null, b:null},
+  chars: [],
+  cache: new Map(),
+  selectedChar: null,
+  viewMode: 'overlay',
+  showGuides: true,
+  showNodes: false,
+  onlyDiff: false,
+  opacity: 1,
+  sortMode: 'order',
+  blinkSpeed: 500,
+  blinkTimer: null,
+  globalGuides: {ascY:-750, descY:250},
+  inkFrame: {minY:-700, maxY:250},
+  zoomHandles: [],
+};
+
+const $ = id => document.getElementById(id);
+const clamp = (n,lo,hi) => Math.max(lo, Math.min(hi, n));
+const fmt = (n,d=1) => (n==null ? '—' : n.toFixed(d));
+
+function svgEl(tag, attrs){
+  const el = document.createElementNS(SVG_NS, tag);
+  if (attrs) for (const k in attrs){ if (attrs[k]!=null) el.setAttribute(k, attrs[k]); }
+  return el;
+}
+
+/* ---------------- font loading ---------------- */
+
+function readFontFile(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try { resolve(opentype.parse(reader.result)); }
+      catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(reader.error || new Error('Could not read the file'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function fontDisplayName(font, fallback){
+  try {
+    const fam = font.getEnglishName('fontFamily') || font.getEnglishName('preferredFamily');
+    const sub = font.getEnglishName('fontSubfamily') || font.getEnglishName('preferredSubfamily');
+    if (fam) return sub && sub.toLowerCase() !== 'regular' ? `${fam} ${sub}` : fam;
+  } catch(e){}
+  return fallback.replace(/\.[^.]+$/, '');
+}
+
+function fontLabel(slot){
+  const font = state.fonts[slot];
+  if (!font) return slot === 'a' ? 'Font A' : 'Font B';
+  const meta = state.meta[slot];
+  return fontDisplayName(font, meta ? meta.fileName : (slot === 'a' ? 'A' : 'B'));
+}
+
+function updateLegend(){
+  $('legA').textContent = fontLabel('a');
+  $('legB').textContent = fontLabel('b');
+}
+
+async function loadFontIntoSlot(slot, file){
+  const errEl = $(slot === 'a' ? 'errA' : 'errB');
+  errEl.hidden = true;
+  const dz = $(slot === 'a' ? 'dropA' : 'dropB');
+  dz.textContent = 'Parsing font…';
+  await new Promise(r => setTimeout(r, 0));
+  try {
+    const font = await readFontFile(file);
+    state.fonts[slot] = font;
+    state.meta[slot] = {fileName: file.name, size: file.size};
+    state.cache.clear();
+    renderSlot(slot);
+    onFontsChanged();
+  } catch (err) {
+    state.fonts[slot] = null;
+    renderSlot(slot);
+    errEl.hidden = false;
+    errEl.textContent = 'Error parsing "' + file.name + '": ' + (err && err.message ? err.message : err);
+  }
+}
+
+function renderSlot(slot){
+  const font = state.fonts[slot];
+  const info = $(slot === 'a' ? 'infoA' : 'infoB');
+  const dz = $(slot === 'a' ? 'dropA' : 'dropB');
+  const clearBtn = $(slot === 'a' ? 'clearA' : 'clearB');
+  info.innerHTML = '';
+  if (!font){
+    dz.innerHTML = '<svg class="glyph-icon" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 20V4h9l4 4v12z"/><path d="M15 4v4h4"/></svg>Drop a file here or <b>choose one</b><br>.ttf · .otf · .woff';
+    info.classList.remove('show');
+    clearBtn.hidden = true;
+    return;
+  }
+  const meta = state.meta[slot];
+  dz.innerHTML = '<svg class="glyph-icon" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 20V4h9l4 4v12z"/><path d="M15 4v4h4"/></svg>Replace file';
+  info.classList.add('show');
+  const fam = document.createElement('div'); fam.className='fam'; fam.textContent = fontDisplayName(font, meta.fileName);
+  const m1 = document.createElement('div'); m1.className='meta';
+  const parts = [
+    'UPM ' + font.unitsPerEm,
+    font.numGlyphs + ' glyphs',
+    (meta.size/1024).toFixed(0) + ' KB',
+  ];
+  parts.forEach(p => { const s=document.createElement('span'); s.textContent=p; m1.appendChild(s); });
+  info.appendChild(fam); info.appendChild(m1);
+  clearBtn.hidden = false;
+}
+
+function clearSlot(slot){
+  state.fonts[slot] = null;
+  state.meta[slot] = null;
+  state.cache.clear();
+  renderSlot(slot);
+  onFontsChanged();
+}
+
+function onFontsChanged(){
+  state.globalGuides = computeGlobalGuides();
+  const both = state.fonts.a && state.fonts.b;
+  $('afterLoad').hidden = !both;
+  $('preHint').hidden = both;
+  updateLegend();
+  if (both) rebuildAll();
+}
+
+function computeGlobalGuides(){
+  const a = state.fonts.a, b = state.fonts.b;
+  const asc = [], desc = [];
+  if (a) { asc.push(a.ascender*(DISPLAY_EM/a.unitsPerEm)); desc.push(a.descender*(DISPLAY_EM/a.unitsPerEm)); }
+  if (b) { asc.push(b.ascender*(DISPLAY_EM/b.unitsPerEm)); desc.push(b.descender*(DISPLAY_EM/b.unitsPerEm)); }
+  const ascNorm = asc.length ? Math.max(...asc) : 750;
+  const descNorm = desc.length ? Math.min(...desc) : -250;
+  return {ascY:-ascNorm, descY:-descNorm};
+}
+
+/* ---------------- glyph analysis ---------------- */
+
+function analyzeGlyph(font, ch){
+  if (!font) return null;
+  const idx = font.charToGlyphIndex(ch);
+  const glyph = font.charToGlyph(ch);
+  if (!glyph || idx === 0) return {missing:true};
+  const scale = DISPLAY_EM / font.unitsPerEm;
+  const path = glyph.getPath(0, 0, DISPLAY_EM);
+  const cmds = path.commands || [];
+  const F = n => Math.round(n*100)/100;
+  let d = '';
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  let contours=0, onCount=0, offCount=0, hasCubic=false, hasQuad=false;
+  const nodes = [], handles = [];
+  let prev=null, start=null;
+  const upd = (x,y) => { if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; };
+  for (const c of cmds){
+    if (c.type === 'M'){
+      d += `M${F(c.x)} ${F(c.y)} `; contours++; onCount++; upd(c.x,c.y);
+      nodes.push({x:c.x,y:c.y,on:true}); prev={x:c.x,y:c.y}; start=prev;
+    } else if (c.type === 'L'){
+      d += `L${F(c.x)} ${F(c.y)} `; onCount++; upd(c.x,c.y);
+      nodes.push({x:c.x,y:c.y,on:true}); prev={x:c.x,y:c.y};
+    } else if (c.type === 'C'){
+      hasCubic = true;
+      d += `C${F(c.x1)} ${F(c.y1)} ${F(c.x2)} ${F(c.y2)} ${F(c.x)} ${F(c.y)} `;
+      upd(c.x1,c.y1); upd(c.x2,c.y2); upd(c.x,c.y); offCount+=2;
+      nodes.push({x:c.x1,y:c.y1,on:false},{x:c.x2,y:c.y2,on:false});
+      if (prev){ handles.push([prev.x,prev.y,c.x1,c.y1]); handles.push([c.x2,c.y2,c.x,c.y]); }
+      onCount++; nodes.push({x:c.x,y:c.y,on:true}); prev={x:c.x,y:c.y};
+    } else if (c.type === 'Q'){
+      hasQuad = true;
+      d += `Q${F(c.x1)} ${F(c.y1)} ${F(c.x)} ${F(c.y)} `;
+      upd(c.x1,c.y1); upd(c.x,c.y); offCount+=1;
+      nodes.push({x:c.x1,y:c.y1,on:false});
+      if (prev){ handles.push([prev.x,prev.y,c.x1,c.y1]); handles.push([c.x1,c.y1,c.x,c.y]); }
+      onCount++; nodes.push({x:c.x,y:c.y,on:true}); prev={x:c.x,y:c.y};
+    } else if (c.type === 'Z'){
+      d += 'Z '; prev = start;
+    }
+  }
+  if (contours === 0){ minX=0;maxX=0;minY=0;maxY=0; }
+  const advNorm = glyph.advanceWidth*scale;
+  return {
+    missing:false, d:d.trim(),
+    bbox:{minX,minY,maxX,maxY},
+    advance:{raw:glyph.advanceWidth, norm:advNorm},
+    lsb: contours ? minX : null,
+    rsb: contours ? (advNorm-maxX) : null,
+    contours, onCount, offCount,
+    curveType: hasCubic ? 'cubic' : (hasQuad ? 'quad' : (contours>0 ? 'lines' : '—')),
+    name: glyph.name || '',
+    unitsPerEm: font.unitsPerEm,
+    nodes, handles,
+  };
+}
+
+function getEntry(ch){
+  let e = state.cache.get(ch);
+  if (!e){
+    const a = analyzeGlyph(state.fonts.a, ch);
+    const b = analyzeGlyph(state.fonts.b, ch);
+    const diff = computeDiffScore(a,b);
+    e = {ch,a,b,diff};
+    state.cache.set(ch, e);
+  }
+  return e;
+}
+
+function rasterMask(d, left, top, right, bottom, size){
+  const c = document.createElement('canvas'); c.width=size; c.height=size;
+  const ctx = c.getContext('2d');
+  ctx.save();
+  ctx.scale(size/(right-left||1), size/(bottom-top||1));
+  ctx.translate(-left, -top);
+  ctx.fillStyle = '#000';
+  if (d) ctx.fill(new Path2D(d));
+  ctx.restore();
+  const data = ctx.getImageData(0,0,size,size).data;
+  const mask = new Uint8Array(size*size);
+  for (let i=0,j=0; i<data.length; i+=4, j++) mask[j] = data[i+3] > 10 ? 1 : 0;
+  return mask;
+}
+
+function computeDiffScore(a,b){
+  if (!a || !b || a.missing || b.missing) return null;
+  if (a.contours===0 && b.contours===0) return 0;
+  const pad = 20, size = 128;
+  const g = state.globalGuides;
+  const left = Math.min(0, a.bbox.minX, b.bbox.minX) - pad;
+  const right = Math.max(a.advance.norm, b.advance.norm, a.bbox.maxX, b.bbox.maxX) + pad;
+  const top = Math.min(g.ascY, a.bbox.minY, b.bbox.minY) - pad;
+  const bottom = Math.max(g.descY, a.bbox.maxY, b.bbox.maxY) + pad;
+  const maskA = rasterMask(a.d, left, top, right, bottom, size);
+  const maskB = rasterMask(b.d, left, top, right, bottom, size);
+  let inter=0, union=0;
+  for (let i=0;i<maskA.length;i++){ const x=maskA[i], y=maskB[i]; if (x||y) union++; if (x&&y) inter++; }
+  return union===0 ? 0 : 1 - inter/union;
+}
+
+/* ---------------- text parsing ---------------- */
+
+function parseChars(text){
+  const seen = new Set();
+  const out = [];
+  for (const ch of Array.from(text)){
+    if (/\s/.test(ch)) continue;
+    if (seen.has(ch)) continue;
+    seen.add(ch); out.push(ch);
+  }
+  return out;
+}
+
+const PRESETS = {
+  latin: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz',
+  cyr: 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ\nабвгдеёжзийклмнопрстуфхцчшщъыьэюя',
+  digits: "0123456789\n.,:;!?…—\"'()",
+};
+PRESETS.all = PRESETS.latin + '\n' + PRESETS.cyr + '\n' + PRESETS.digits;
+
+/* ---------------- rendering: grid ---------------- */
+
+function computeInkFrame(){
+  let minY=Infinity, maxY=-Infinity;
+  for (const ch of state.chars){
+    const e = getEntry(ch);
+    for (const s of [e.a, e.b]){
+      if (s && !s.missing && s.contours){
+        if (s.bbox.minY<minY) minY=s.bbox.minY;
+        if (s.bbox.maxY>maxY) maxY=s.bbox.maxY;
+      }
+    }
+  }
+  if (!isFinite(minY)){ minY=-700; maxY=250; }
+  return {minY, maxY};
+}
+
+function unionBox(a,b,pad){
+  const f = state.inkFrame;
+  const xs=[0], ys=[0,f.minY,f.maxY];
+  if (a && !a.missing){ xs.push(a.bbox.minX,a.bbox.maxX,a.advance.norm); ys.push(a.bbox.minY,a.bbox.maxY); }
+  if (b && !b.missing){ xs.push(b.bbox.minX,b.bbox.maxX,b.advance.norm); ys.push(b.bbox.minY,b.bbox.maxY); }
+  const minX=Math.min(...xs)-pad, maxX=Math.max(...xs)+pad;
+  const minY=Math.min(...ys)-pad, maxY=Math.max(...ys)+pad;
+  return {minX,minY,width:Math.max(maxX-minX,1),height:Math.max(maxY-minY,1)};
+}
+
+function appendNodes(parent, entry, color){
+  const g = svgEl('g',{class:'nodes'});
+  for (const h of entry.handles) g.appendChild(svgEl('line',{x1:h[0],y1:h[1],x2:h[2],y2:h[3],stroke:color,'stroke-width':1.4,'stroke-dasharray':'5 5','stroke-opacity':0.5}));
+  for (const n of entry.nodes){
+    if (n.on) g.appendChild(svgEl('circle',{cx:n.x,cy:n.y,r:7,fill:color,stroke:'#fff','stroke-width':1.5}));
+    else g.appendChild(svgEl('rect',{x:n.x-5,y:n.y-5,width:10,height:10,fill:'#fff',stroke:color,'stroke-width':2}));
+  }
+  parent.appendChild(g);
+}
+
+function buildGlyphSVG(a, b, opts){
+  const box = unionBox(a,b,opts.pad);
+  const svg = svgEl('svg',{viewBox:`${box.minX} ${box.minY} ${box.width} ${box.height}`, class:'glyph-svg'});
+  svg.appendChild(svgEl('rect',{x:box.minX,y:box.minY,width:box.width,height:box.height,fill:'#ffffff'}));
+
+  if (opts.showGuides){
+    const g = svgEl('g',{});
+    const gc='#9c9284', w=box.width;
+    g.appendChild(svgEl('line',{x1:box.minX,x2:box.minX+w,y1:0,y2:0,stroke:gc,'stroke-width':1.2}));
+    g.appendChild(svgEl('line',{x1:box.minX,x2:box.minX+w,y1:state.globalGuides.ascY,y2:state.globalGuides.ascY,stroke:gc,'stroke-width':1,'stroke-dasharray':'3 4'}));
+    g.appendChild(svgEl('line',{x1:box.minX,x2:box.minX+w,y1:state.globalGuides.descY,y2:state.globalGuides.descY,stroke:gc,'stroke-width':1,'stroke-dasharray':'3 4'}));
+    svg.appendChild(g);
+  }
+
+  const zoomG = svgEl('g',{class:'zoomG'});
+  const showA = opts.mode !== 'sideB';
+  const showB = opts.mode !== 'sideA';
+  const blend = opts.mode === 'overlay';
+  const inkG = svgEl('g', blend ? {style:'isolation:isolate'} : {});
+  let pathA=null, pathB=null;
+  if (showA && a && !a.missing && a.d) pathA = inkG.appendChild(svgEl('path',{d:a.d, fill:COLOR_A, 'fill-opacity':opts.opacity, style: blend?'mix-blend-mode:multiply':''}));
+  if (showB && b && !b.missing && b.d) pathB = inkG.appendChild(svgEl('path',{d:b.d, fill:COLOR_B, 'fill-opacity':opts.opacity, style: blend?'mix-blend-mode:multiply':''}));
+  zoomG.appendChild(inkG);
+
+  if (opts.showTicks){
+    if (showA && a && !a.missing) zoomG.appendChild(svgEl('line',{x1:a.advance.norm,x2:a.advance.norm,y1:10,y2:30,stroke:COLOR_A,'stroke-width':3}));
+    if (showB && b && !b.missing) zoomG.appendChild(svgEl('line',{x1:b.advance.norm,x2:b.advance.norm,y1:34,y2:54,stroke:COLOR_B,'stroke-width':3}));
+  }
+  if (opts.showNodes){
+    if (showA && a && !a.missing) appendNodes(zoomG, a, COLOR_A);
+    if (showB && b && !b.missing) appendNodes(zoomG, b, COLOR_B);
+  }
+  svg.appendChild(zoomG);
+
+  if (opts.mode === 'blink'){
+    svg.__blinkA = pathA; svg.__blinkB = pathB;
+  }
+  if (opts.interactive) attachZoomPan(svg, zoomG, box);
+  return svg;
+}
+
+function attachZoomPan(svg, zoomG, box){
+  const cx = box.minX + box.width/2, cy = box.minY + box.height/2;
+  const st = {scale:1, tx:0, ty:0};
+  function apply(){ zoomG.setAttribute('transform', `translate(${cx},${cy}) scale(${st.scale}) translate(${-cx+st.tx},${-cy+st.ty})`); }
+  apply();
+  svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const f = e.deltaY < 0 ? 1.12 : 1/1.12;
+    st.scale = clamp(st.scale*f, 0.4, 10);
+    apply();
+  }, {passive:false});
+  let lastX=0, lastY=0;
+  svg.addEventListener('pointerdown', e => { svg.setPointerCapture(e.pointerId); lastX=e.clientX; lastY=e.clientY; });
+  svg.addEventListener('pointermove', e => {
+    if (!svg.hasPointerCapture(e.pointerId)) return;
+    const rect = svg.getBoundingClientRect();
+    const ux = box.width/rect.width, uy = box.height/rect.height;
+    st.tx += (e.clientX-lastX)*ux/st.scale;
+    st.ty += (e.clientY-lastY)*uy/st.scale;
+    lastX=e.clientX; lastY=e.clientY;
+    apply();
+  });
+  svg.addEventListener('pointerup', e => { if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId); });
+  svg.addEventListener('dblclick', () => { st.scale=1; st.tx=0; st.ty=0; apply(); });
+  state.zoomHandles.push({
+    zoomIn(){ st.scale=clamp(st.scale*1.3,0.4,10); apply(); },
+    zoomOut(){ st.scale=clamp(st.scale/1.3,0.4,10); apply(); },
+    reset(){ st.scale=1; st.tx=0; st.ty=0; apply(); },
+  });
+}
+
+function badgeFor(entry){
+  const b = document.createElement('span');
+  if (entry.a.missing || entry.b.missing){
+    b.className='cell-badge warn'; b.textContent='!';
+    b.title = entry.a.missing && entry.b.missing ? 'Missing from both fonts' : (entry.a.missing ? 'Missing from font A' : 'Missing from font B');
+  } else {
+    const pct = Math.round(entry.diff*100);
+    b.className = 'cell-badge' + (entry.diff>0.15 ? ' high' : entry.diff<=0.01 ? ' good' : '');
+    b.textContent = pct+'%';
+    b.title = 'Outline difference: '+pct+'%';
+  }
+  return b;
+}
+
+function buildCell(entry){
+  const cell = document.createElement('button');
+  cell.type='button'; cell.className='cell';
+  if (entry.ch === state.selectedChar) cell.classList.add('selected');
+  const svg = buildGlyphSVG(entry.a, entry.b, {mode:'overlay', showGuides:false, showNodes:false, showTicks:false, opacity:1, pad:50});
+  svg.style.cursor='pointer';
+  cell.appendChild(svg);
+  const label = document.createElement('span'); label.className='cell-label'; label.textContent = entry.ch;
+  cell.appendChild(label);
+  cell.appendChild(badgeFor(entry));
+  cell.addEventListener('click', () => selectChar(entry.ch));
+  return cell;
+}
+
+function getDisplayList(){
+  let list = state.chars.map(getEntry);
+  if (state.onlyDiff) list = list.filter(e => e.a.missing || e.b.missing || (e.diff!=null && e.diff>0.01));
+  if (state.sortMode === 'diff'){
+    list = list.slice().sort((x,y) => {
+      const dx = x.a.missing||x.b.missing ? 2 : (x.diff||0);
+      const dy = y.a.missing||y.b.missing ? 2 : (y.diff||0);
+      return dy-dx;
+    });
+  }
+  return list;
+}
+
+function renderGrid(){
+  const grid = $('grid');
+  grid.innerHTML = '';
+  const list = getDisplayList();
+  $('gridCount').textContent = list.length + ' of ' + state.chars.length;
+  if (!list.length){
+    const p = document.createElement('div'); p.className='empty-hint';
+    p.textContent = state.chars.length ? 'No characters match the filter.' : 'Type some text above to compare characters.';
+    grid.appendChild(p);
+    return;
+  }
+  if (!list.some(e => e.ch === state.selectedChar)) state.selectedChar = list[0].ch;
+  for (const e of list) grid.appendChild(buildCell(e));
+}
+
+/* ---------------- rendering: detail ---------------- */
+
+function stopBlink(){
+  if (state.blinkTimer){ clearInterval(state.blinkTimer); state.blinkTimer=null; }
+}
+
+function renderDetailFonts(){
+  const box = $('detailFonts');
+  box.innerHTML = '';
+  [['a',COLOR_A],['b',COLOR_B]].forEach(([slot,color]) => {
+    const s = document.createElement('span'); s.className = 'dfont';
+    const dot = document.createElement('span'); dot.className = 'dot ' + slot;
+    const name = document.createElement('span'); name.className = 'name'; name.style.color = color; name.textContent = fontLabel(slot);
+    s.appendChild(dot); s.appendChild(name);
+    box.appendChild(s);
+  });
+}
+
+function renderDetail(){
+  stopBlink();
+  state.zoomHandles = [];
+  const body = $('detailBody');
+  body.innerHTML = '';
+  const entry = state.chars.length ? getEntry(state.selectedChar) : null;
+  if (!entry){
+    $('dChar').textContent = '—'; $('dCp').textContent=''; $('dDiffNum').textContent='—';
+    $('detailFonts').innerHTML = '';
+    body.innerHTML = '<div class="missing-note">No character selected.</div>';
+    renderMetrics(null);
+    return;
+  }
+  $('dChar').textContent = entry.ch;
+  const cp = entry.ch.codePointAt(0);
+  $('dCp').textContent = 'U+' + cp.toString(16).toUpperCase().padStart(4,'0');
+  renderDetailFonts();
+  const diffNum = $('dDiffNum');
+  if (entry.a.missing || entry.b.missing){
+    diffNum.textContent = '—'; diffNum.className='num';
+  } else {
+    const pct = entry.diff*100;
+    diffNum.textContent = fmt(pct,1)+'%';
+    diffNum.className = 'num ' + (pct<=1 ? 'good' : pct>15 ? 'bad' : '');
+  }
+
+  if (entry.a.missing && entry.b.missing){
+    body.innerHTML = '<div class="missing-note">The character "'+entry.ch+'" is missing from both fonts.</div>';
+  } else if (state.viewMode === 'side'){
+    const wrap = document.createElement('div');
+    const gridS = document.createElement('div'); gridS.className='side-grid';
+    [['a',COLOR_A,'sideA'],['b',COLOR_B,'sideB']].forEach(([slot,color,mode]) => {
+      const col = document.createElement('div');
+      const l = document.createElement('div'); l.className='side-label'; l.style.color=color; l.textContent=fontLabel(slot);
+      col.appendChild(l);
+      const frame = document.createElement('div'); frame.className='paper-sheet';
+      frame.appendChild(buildGlyphSVG(entry.a, entry.b, {mode, showGuides:state.showGuides, showNodes:state.showNodes, showTicks:true, opacity:1, pad:80, interactive:true}));
+      col.appendChild(frame);
+      gridS.appendChild(col);
+    });
+    wrap.appendChild(gridS);
+    body.appendChild(wrap);
+  } else {
+    const frame = document.createElement('div'); frame.className='canvas-frame';
+    const sheet = document.createElement('div'); sheet.className='paper-sheet';
+    const mode = state.viewMode === 'blink' ? 'blink' : 'overlay';
+    const svg = buildGlyphSVG(entry.a, entry.b, {mode, showGuides:state.showGuides, showNodes:state.showNodes, showTicks:true, opacity: state.viewMode==='blink'?1:state.opacity, pad:80, interactive:true});
+    sheet.appendChild(svg);
+    frame.appendChild(sheet);
+    body.appendChild(frame);
+    if (mode === 'blink' && svg.__blinkA && svg.__blinkB){
+      let showA = true;
+      const label = svgEl('text',{x:8,y:-6,'font-size':0}); // placeholder unused
+      const tick = () => {
+        showA = !showA;
+        svg.__blinkA.setAttribute('display', showA ? '' : 'none');
+        svg.__blinkB.setAttribute('display', showA ? 'none' : '');
+      };
+      svg.__blinkB.setAttribute('display','none');
+      state.blinkTimer = setInterval(tick, state.blinkSpeed);
+    }
+  }
+
+  const sideNote = document.createElement('div');
+  body.appendChild(sideNote);
+  renderMetrics(entry);
+}
+
+function metricRow(label, va, vb, vd, flag){
+  const tr = document.createElement('tr');
+  const k = document.createElement('td'); k.className='k'; k.textContent=label; tr.appendChild(k);
+  const a = document.createElement('td'); a.className='a'; a.textContent=va; tr.appendChild(a);
+  const b = document.createElement('td'); b.className='b'; b.textContent=vb; tr.appendChild(b);
+  const d = document.createElement('td'); d.className='d'+(flag?' flag':''); d.textContent=vd; tr.appendChild(d);
+  return tr;
+}
+
+function renderMetrics(entry){
+  const container = document.createElement('div');
+  container.className = 'metrics';
+  const scroll = document.createElement('div'); scroll.className='metrics-scroll';
+  const table = document.createElement('table'); table.className='mt';
+  const thead = document.createElement('tr');
+  ['Metric', fontLabel('a'), fontLabel('b'), 'Δ / info'].forEach(h => { const th=document.createElement('th'); th.textContent=h; thead.appendChild(th); });
+  table.appendChild(thead);
+
+  if (!entry){
+    scroll.appendChild(table); container.appendChild(scroll);
+  } else if (entry.a.missing || entry.b.missing){
+    table.appendChild(metricRow('Glyph present', entry.a.missing?'no':'yes', entry.b.missing?'no':'yes', 'see warning', true));
+    scroll.appendChild(table); container.appendChild(scroll);
+  } else {
+    const a=entry.a, b=entry.b;
+    table.appendChild(metricRow('Glyph name', a.name||'—', b.name||'—', a.name===b.name?'match':'differs', a.name!==b.name));
+    table.appendChild(metricRow('Font UPM', a.unitsPerEm, b.unitsPerEm, a.unitsPerEm===b.unitsPerEm?'match':'differs', a.unitsPerEm!==b.unitsPerEm));
+    table.appendChild(metricRow('Width (raw)', fmt(a.advance.raw,0), fmt(b.advance.raw,0), ''));
+    const advD = a.advance.norm-b.advance.norm;
+    table.appendChild(metricRow('Width (norm. UPM 1000)', fmt(a.advance.norm,1), fmt(b.advance.norm,1), (advD>=0?'+':'')+fmt(advD,1), Math.abs(advD)>0.5));
+    table.appendChild(metricRow('LSB (norm.)', fmt(a.lsb,1), fmt(b.lsb,1), fmt(a.lsb-b.lsb,1)));
+    table.appendChild(metricRow('RSB (norm.)', fmt(a.rsb,1), fmt(b.rsb,1), fmt(a.rsb-b.rsb,1)));
+    table.appendChild(metricRow('BBox X (norm.)', `${fmt(a.bbox.minX,0)}…${fmt(a.bbox.maxX,0)}`, `${fmt(b.bbox.minX,0)}…${fmt(b.bbox.maxX,0)}`, ''));
+    table.appendChild(metricRow('BBox Y (norm.)', `${fmt(a.bbox.minY,0)}…${fmt(a.bbox.maxY,0)}`, `${fmt(b.bbox.minY,0)}…${fmt(b.bbox.maxY,0)}`, ''));
+    table.appendChild(metricRow('Contours', a.contours, b.contours, a.contours===b.contours?'match':'differs', a.contours!==b.contours));
+    table.appendChild(metricRow('Points', a.onCount, b.onCount, a.onCount===b.onCount?'match':'differs', a.onCount!==b.onCount));
+    table.appendChild(metricRow('Curve type', a.curveType, b.curveType, a.curveType===b.curveType?'match':'incompatible', a.curveType!==b.curveType));
+    scroll.appendChild(table); container.appendChild(scroll);
+  }
+  const body = $('detailBody');
+  body.appendChild(container);
+}
+
+/* ---------------- summary ---------------- */
+
+function renderSummary(){
+  const bar = $('summaryBar');
+  bar.innerHTML = '';
+  const list = state.chars.map(getEntry);
+  const total = list.length;
+  const missingA = list.filter(e => e.a.missing).length;
+  const missingB = list.filter(e => e.b.missing).length;
+  const compared = list.filter(e => !e.a.missing && !e.b.missing);
+  const widthDiff = compared.filter(e => Math.abs(e.a.advance.norm-e.b.advance.norm) > 0.5).length;
+  const avgDiff = compared.length ? compared.reduce((s,e)=>s+e.diff,0)/compared.length*100 : 0;
+  let worst = null;
+  for (const e of compared) if (!worst || e.diff>worst.diff) worst = e;
+
+  const stats = [
+    ['Characters', total, false],
+    ['Missing in A', missingA, missingA>0],
+    ['Missing in B', missingB, missingB>0],
+    ['Width differs', widthDiff, widthDiff>0],
+    ['Avg. difference', fmt(avgDiff,1)+'%', avgDiff>5],
+  ];
+  for (const [l,n,warn] of stats){
+    const s = document.createElement('div'); s.className='stat';
+    const nEl = document.createElement('div'); nEl.className='n'+(warn?' warn':''); nEl.textContent=n;
+    const lEl = document.createElement('div'); lEl.className='l'; lEl.textContent=l;
+    s.appendChild(nEl); s.appendChild(lEl); bar.appendChild(s);
+  }
+  if (worst && worst.diff>0.01){
+    const btn = document.createElement('button');
+    btn.className='btn'; btn.textContent = 'Show most different: "'+worst.ch+'" ('+Math.round(worst.diff*100)+'%)';
+    btn.addEventListener('click', () => selectChar(worst.ch));
+    bar.appendChild(btn);
+  }
+}
+
+/* ---------------- orchestration ---------------- */
+
+function selectChar(ch){
+  state.selectedChar = ch;
+  document.querySelectorAll('.cell').forEach(c => c.classList.remove('selected'));
+  renderGrid();
+  renderDetail();
+  $('detailPanel').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto':'smooth', block:'nearest'});
+}
+
+function rebuildAll(){
+  const text = $('compareText').value;
+  try { localStorage.setItem('glyphdiff.text', text); } catch(e){}
+  state.chars = parseChars(text);
+  if (!state.chars.includes(state.selectedChar)) state.selectedChar = state.chars[0] || null;
+  state.inkFrame = computeInkFrame();
+  renderGrid();
+  renderDetail();
+  renderSummary();
+}
+
+let debounceTimer;
+function onTextInput(){
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(rebuildAll, 150);
+}
+
+function wireDropzone(labelEl, inputEl, slot){
+  inputEl.addEventListener('change', () => { if (inputEl.files[0]) loadFontIntoSlot(slot, inputEl.files[0]); });
+  labelEl.addEventListener('dragover', e => { e.preventDefault(); labelEl.classList.add('drag'); });
+  labelEl.addEventListener('dragleave', () => labelEl.classList.remove('drag'));
+  labelEl.addEventListener('drop', e => {
+    e.preventDefault(); labelEl.classList.remove('drag');
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) loadFontIntoSlot(slot, f);
+  });
+}
+
+function init(){
+  wireDropzone($('dropA'), $('fileInputA'), 'a');
+  wireDropzone($('dropB'), $('fileInputB'), 'b');
+  $('clearA').addEventListener('click', e => { e.preventDefault(); clearSlot('a'); });
+  $('clearB').addEventListener('click', e => { e.preventDefault(); clearSlot('b'); });
+  $('swapBtn').addEventListener('click', () => {
+    [state.fonts.a, state.fonts.b] = [state.fonts.b, state.fonts.a];
+    [state.meta.a, state.meta.b] = [state.meta.b, state.meta.a];
+    state.cache.clear();
+    renderSlot('a'); renderSlot('b');
+    onFontsChanged();
+  });
+
+  let initialText = PRESETS.all;
+  try { const saved = localStorage.getItem('glyphdiff.text'); if (saved) initialText = saved; } catch(e){}
+  $('compareText').value = initialText;
+  $('compareText').addEventListener('input', onTextInput);
+
+  document.querySelectorAll('.presets [data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $('compareText').value = btn.dataset.preset === 'clear' ? '' : PRESETS[btn.dataset.preset];
+      rebuildAll();
+      try { localStorage.setItem('glyphdiff.text', $('compareText').value); } catch(e){}
+    });
+  });
+
+  document.querySelectorAll('#viewModeSeg button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#viewModeSeg button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.viewMode = btn.dataset.mode;
+      $('opacityWrap').hidden = state.viewMode !== 'overlay';
+      $('blinkWrap').hidden = state.viewMode !== 'blink';
+      renderDetail();
+    });
+  });
+
+  $('chkGuides').addEventListener('change', e => { state.showGuides = e.target.checked; renderDetail(); });
+  $('chkNodes').addEventListener('change', e => { state.showNodes = e.target.checked; renderDetail(); });
+  $('chkOnlyDiff').addEventListener('change', e => { state.onlyDiff = e.target.checked; renderGrid(); });
+  $('opacitySlider').addEventListener('input', e => { state.opacity = (+e.target.value)/100; renderDetail(); });
+  $('blinkSlider').addEventListener('input', e => { state.blinkSpeed = +e.target.value; if (state.viewMode==='blink') renderDetail(); });
+  $('sortSelect').addEventListener('change', e => { state.sortMode = e.target.value; renderGrid(); });
+
+  $('zoomIn').addEventListener('click', () => state.zoomHandles.forEach(h => h.zoomIn()));
+  $('zoomOut').addEventListener('click', () => state.zoomHandles.forEach(h => h.zoomOut()));
+  $('zoomReset').addEventListener('click', () => state.zoomHandles.forEach(h => h.reset()));
+
+  $('grid').addEventListener('keydown', e => {
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) return;
+    e.preventDefault();
+    const list = getDisplayList();
+    if (!list.length) return;
+    let i = list.findIndex(x => x.ch === state.selectedChar);
+    if (i<0) i=0;
+    if (e.key==='ArrowLeft') i = Math.max(0,i-1);
+    else if (e.key==='ArrowRight') i = Math.min(list.length-1,i+1);
+    else if (e.key==='Home') i=0;
+    else if (e.key==='End') i=list.length-1;
+    selectChar(list[i].ch);
+  });
+}
+
+init();
+})();
+</script>

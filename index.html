@@ -209,7 +209,7 @@ footer.note a{color:inherit;}
       <div class="text-row">
         <textarea id="compareText" spellcheck="false" rows="3"></textarea>
         <div class="presets">
-          <button class="btn" data-preset="all">All</button>
+          <button class="btn" data-preset="all" title="Every character mapped in either loaded font">All</button>
           <button class="btn" data-preset="latin">Latin</button>
           <button class="btn" data-preset="cyr">Cyrillic</button>
           <button class="btn" data-preset="digits">Digits &amp; punctuation</button>
@@ -651,7 +651,20 @@ const PRESETS = {
   cyr: 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ\nабвгдеёжзийклмнопрстуфхцчшщъыьэюя',
   digits: "0123456789\n.,:;!?…—\"'()",
 };
-PRESETS.all = PRESETS.latin + '\n' + PRESETS.cyr + '\n' + PRESETS.digits;
+const DEFAULT_SAMPLE_TEXT = PRESETS.latin + '\n' + PRESETS.cyr + '\n' + PRESETS.digits;
+
+function fontCodepoints(font){
+  const map = font && font.tables.cmap && font.tables.cmap.glyphIndexMap;
+  if (!map) return [];
+  return Object.keys(map)
+    .map(Number)
+    .filter(cp => cp >= 0x20 && !(cp >= 0x7F && cp <= 0x9F));
+}
+
+function allLoadedGlyphsText(){
+  const codes = new Set([...fontCodepoints(state.fonts.a), ...fontCodepoints(state.fonts.b)]);
+  return Array.from(codes).sort((a,b) => a-b).map(cp => String.fromCodePoint(cp)).join('');
+}
 
 /* ---------------- rendering: grid ---------------- */
 
@@ -1034,14 +1047,15 @@ function init(){
     onFontsChanged();
   });
 
-  let initialText = PRESETS.all;
+  let initialText = DEFAULT_SAMPLE_TEXT;
   try { const saved = localStorage.getItem('glyphdiff.text'); if (saved) initialText = saved; } catch(e){}
   $('compareText').value = initialText;
   $('compareText').addEventListener('input', onTextInput);
 
   document.querySelectorAll('.presets [data-preset]').forEach(btn => {
     btn.addEventListener('click', () => {
-      $('compareText').value = btn.dataset.preset === 'clear' ? '' : PRESETS[btn.dataset.preset];
+      const key = btn.dataset.preset;
+      $('compareText').value = key === 'clear' ? '' : key === 'all' ? allLoadedGlyphsText() : PRESETS[key];
       rebuildAll();
       try { localStorage.setItem('glyphdiff.text', $('compareText').value); } catch(e){}
     });

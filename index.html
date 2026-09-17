@@ -95,7 +95,7 @@ button{font-family:inherit;}
 .seg button.active{background:var(--accent-a); color:#fff;}
 .opt{display:flex; align-items:center; gap:6px; color:var(--ink-muted); cursor:pointer; user-select:none;}
 .opt input{accent-color:var(--accent-a);}
-.opt-row select{font-family:inherit; font-size:13px; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:7px; padding:5px 8px;}
+.opt-row select, .canvas-toolbar select{font-family:inherit; font-size:13px; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:7px; padding:5px 8px;}
 .slider-wrap{display:flex; align-items:center; gap:8px; color:var(--ink-muted); font-size:13px;}
 .slider-wrap input[type=range]{accent-color:var(--accent-a);}
 
@@ -222,21 +222,6 @@ footer.note a{color:inherit;}
           <button data-mode="blink">Blink</button>
           <button data-mode="side">Side by side</button>
         </div>
-        <div class="slider-wrap" title="Which edge or center of each glyph's own ink to align, per axis — pin an edge to isolate differences on the opposite side">
-          align
-          <select id="alignH">
-            <option value="origin">natural</option>
-            <option value="left">left</option>
-            <option value="center" selected>center</option>
-            <option value="right">right</option>
-          </select>
-          <select id="alignV">
-            <option value="origin">baseline</option>
-            <option value="top">top</option>
-            <option value="middle" selected>middle</option>
-            <option value="bottom">bottom</option>
-          </select>
-        </div>
         <label class="opt"><input type="checkbox" id="chkGuides" checked> guides</label>
         <label class="opt"><input type="checkbox" id="chkNodes"> nodes</label>
         <label class="opt"><input type="checkbox" id="chkOnlyDiff"> diffs only</label>
@@ -278,6 +263,21 @@ footer.note a{color:inherit;}
           <button id="zoomOut" title="Zoom out">−</button>
           <button id="zoomReset" title="Reset view">⊙</button>
           <button id="zoomIn" title="Zoom in">+</button>
+        </div>
+        <div class="slider-wrap" title="Which edge or center of each glyph's own ink to align, per axis — pin an edge to isolate differences on the opposite side">
+          align
+          <select id="alignH">
+            <option value="origin">natural</option>
+            <option value="left">left</option>
+            <option value="center" selected>center</option>
+            <option value="right">right</option>
+          </select>
+          <select id="alignV">
+            <option value="origin">baseline</option>
+            <option value="top">top</option>
+            <option value="middle" selected>middle</option>
+            <option value="bottom">bottom</option>
+          </select>
         </div>
         <div class="legend">
           <span><i style="background:var(--accent-a)"></i>only <span id="legA">A</span></span>

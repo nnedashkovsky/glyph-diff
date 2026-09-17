@@ -82,14 +82,7 @@ button{font-family:inherit;}
 /* ---- controls ---- */
 [hidden]{display:none !important;}
 .panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow);}
-.text-collapse{background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow);}
-.text-collapse summary{list-style:none; cursor:pointer; padding:14px 16px; display:flex; align-items:center; gap:10px; font-weight:600; font-size:14px; color:var(--ink);}
-.text-collapse summary::-webkit-details-marker{display:none;}
-.text-collapse summary .count{font-weight:400; font-size:12.5px; color:var(--ink-faint); font-family:var(--font-mono);}
-.text-collapse summary .chev{margin-left:auto; color:var(--ink-faint); font-size:11px; transition:transform .15s ease;}
-.text-collapse[open] summary .chev{transform:rotate(180deg);}
-.text-collapse[open] summary{border-bottom:1px solid var(--line);}
-.text-row{display:flex; flex-direction:column; gap:8px; padding:16px;}
+.text-row{display:flex; flex-direction:column; gap:8px;}
 .text-row textarea{width:100%; resize:vertical; min-height:64px; font-family:var(--font-mono); font-size:14px; padding:10px 12px; border-radius:9px; border:1px solid var(--line); background:var(--bg); color:var(--ink); line-height:1.5;}
 .presets{display:flex; gap:7px; flex-wrap:wrap;}
 .btn{border:1px solid var(--line); background:var(--panel-2); color:var(--ink); font-size:12.5px; padding:6px 11px; border-radius:20px; cursor:pointer;}
@@ -159,7 +152,13 @@ button{font-family:inherit;}
 .missing-note{padding:14px; text-align:center; color:var(--ink-muted); font-size:13.5px; background:var(--panel-2); border-radius:10px; border:1px dashed var(--line);}
 
 /* ---- metrics table ---- */
-.metrics{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel-2);}
+.metrics-collapse{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel-2);}
+.metrics-collapse summary{list-style:none; cursor:pointer; padding:12px 14px; display:flex; align-items:center; gap:10px; font-weight:600; font-size:13.5px; color:var(--ink);}
+.metrics-collapse summary::-webkit-details-marker{display:none;}
+.metrics-collapse summary .count{font-weight:400; font-size:12px; color:var(--warn); font-family:var(--font-mono);}
+.metrics-collapse summary .chev{margin-left:auto; color:var(--ink-faint); font-size:11px; transition:transform .15s ease;}
+.metrics-collapse[open] summary .chev{transform:rotate(180deg);}
+.metrics-collapse[open] summary{border-bottom:1px solid var(--line);}
 .metrics-scroll{overflow-x:auto;}
 table.mt{border-collapse:collapse; width:100%; font-size:13px; font-family:var(--font-mono); min-width:420px;}
 table.mt th{text-align:left; font-family:var(--font-body); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); font-weight:600; padding:9px 10px; border-bottom:1px solid var(--line);}
@@ -222,8 +221,7 @@ footer.note a{color:inherit;}
   </div>
 
   <div id="afterLoad" hidden style="display:flex; flex-direction:column; gap:20px;">
-    <details class="text-collapse">
-      <summary>Compare text <span class="count" id="textToggleCount"></span><span class="chev">▾</span></summary>
+    <div class="panel">
       <div class="text-row">
         <textarea id="compareText" spellcheck="false" rows="3"></textarea>
         <div class="presets">
@@ -234,7 +232,7 @@ footer.note a{color:inherit;}
           <button class="btn" data-preset="clear">Clear</button>
         </div>
       </div>
-    </details>
+    </div>
 
     <div class="workspace">
       <div class="sidebar-col">
@@ -349,7 +347,9 @@ const state = {
   globalGuides: {ascY:-750, descY:250},
   inkFrame: {minY:-700, maxY:250},
   zoomHandles: [],
+  metricsOpen: false,
 };
+try { state.metricsOpen = !!localStorage.getItem('glyphdiff.metricsOpen'); } catch(e){}
 
 const $ = id => document.getElementById(id);
 const clamp = (n,lo,hi) => Math.max(lo, Math.min(hi, n));
@@ -1024,37 +1024,53 @@ function metricRow(label, va, vb, vd, flag){
 }
 
 function renderMetrics(entry){
-  const container = document.createElement('div');
-  container.className = 'metrics';
   const scroll = document.createElement('div'); scroll.className='metrics-scroll';
   const table = document.createElement('table'); table.className='mt';
   const thead = document.createElement('tr');
   ['Metric', fontLabel('a'), fontLabel('b'), 'Δ / info'].forEach(h => { const th=document.createElement('th'); th.textContent=h; thead.appendChild(th); });
   table.appendChild(thead);
 
+  let flagCount = 0;
+  const row = (label,va,vb,vd,flag) => { if (flag) flagCount++; table.appendChild(metricRow(label,va,vb,vd,flag)); };
+
   if (!entry){
-    scroll.appendChild(table); container.appendChild(scroll);
+    // header only
   } else if (entry.a.missing || entry.b.missing){
-    table.appendChild(metricRow('Glyph present', entry.a.missing?'no':'yes', entry.b.missing?'no':'yes', 'see warning', true));
-    scroll.appendChild(table); container.appendChild(scroll);
+    row('Glyph present', entry.a.missing?'no':'yes', entry.b.missing?'no':'yes', 'see warning', true);
   } else {
     const a=entry.a, b=entry.b;
-    table.appendChild(metricRow('Glyph name', a.name||'—', b.name||'—', a.name===b.name?'match':'differs', a.name!==b.name));
-    table.appendChild(metricRow('Font UPM', a.unitsPerEm, b.unitsPerEm, a.unitsPerEm===b.unitsPerEm?'match':'differs', a.unitsPerEm!==b.unitsPerEm));
-    table.appendChild(metricRow('Width (raw)', fmt(a.advance.raw,0), fmt(b.advance.raw,0), ''));
+    row('Glyph name', a.name||'—', b.name||'—', a.name===b.name?'match':'differs', a.name!==b.name);
+    row('Font UPM', a.unitsPerEm, b.unitsPerEm, a.unitsPerEm===b.unitsPerEm?'match':'differs', a.unitsPerEm!==b.unitsPerEm);
+    row('Width (raw)', fmt(a.advance.raw,0), fmt(b.advance.raw,0), '', false);
     const advD = a.advance.norm-b.advance.norm;
-    table.appendChild(metricRow('Width (norm. UPM 1000)', fmt(a.advance.norm,1), fmt(b.advance.norm,1), (advD>=0?'+':'')+fmt(advD,1), Math.abs(advD)>0.5));
-    table.appendChild(metricRow('LSB (norm.)', fmt(a.lsb,1), fmt(b.lsb,1), fmt(a.lsb-b.lsb,1)));
-    table.appendChild(metricRow('RSB (norm.)', fmt(a.rsb,1), fmt(b.rsb,1), fmt(a.rsb-b.rsb,1)));
-    table.appendChild(metricRow('BBox X (norm.)', `${fmt(a.bbox.minX,0)}…${fmt(a.bbox.maxX,0)}`, `${fmt(b.bbox.minX,0)}…${fmt(b.bbox.maxX,0)}`, ''));
-    table.appendChild(metricRow('BBox Y (norm.)', `${fmt(a.bbox.minY,0)}…${fmt(a.bbox.maxY,0)}`, `${fmt(b.bbox.minY,0)}…${fmt(b.bbox.maxY,0)}`, ''));
-    table.appendChild(metricRow('Contours', a.contours, b.contours, a.contours===b.contours?'match':'differs', a.contours!==b.contours));
-    table.appendChild(metricRow('Points', a.onCount, b.onCount, a.onCount===b.onCount?'match':'differs', a.onCount!==b.onCount));
-    table.appendChild(metricRow('Curve type', a.curveType, b.curveType, a.curveType===b.curveType?'match':'incompatible', a.curveType!==b.curveType));
-    scroll.appendChild(table); container.appendChild(scroll);
+    row('Width (norm. UPM 1000)', fmt(a.advance.norm,1), fmt(b.advance.norm,1), (advD>=0?'+':'')+fmt(advD,1), Math.abs(advD)>0.5);
+    row('LSB (norm.)', fmt(a.lsb,1), fmt(b.lsb,1), fmt(a.lsb-b.lsb,1), false);
+    row('RSB (norm.)', fmt(a.rsb,1), fmt(b.rsb,1), fmt(a.rsb-b.rsb,1), false);
+    row('BBox X (norm.)', `${fmt(a.bbox.minX,0)}…${fmt(a.bbox.maxX,0)}`, `${fmt(b.bbox.minX,0)}…${fmt(b.bbox.maxX,0)}`, '', false);
+    row('BBox Y (norm.)', `${fmt(a.bbox.minY,0)}…${fmt(a.bbox.maxY,0)}`, `${fmt(b.bbox.minY,0)}…${fmt(b.bbox.maxY,0)}`, '', false);
+    row('Contours', a.contours, b.contours, a.contours===b.contours?'match':'differs', a.contours!==b.contours);
+    row('Points', a.onCount, b.onCount, a.onCount===b.onCount?'match':'differs', a.onCount!==b.onCount);
+    row('Curve type', a.curveType, b.curveType, a.curveType===b.curveType?'match':'incompatible', a.curveType!==b.curveType);
   }
-  const body = $('detailBody');
-  body.appendChild(container);
+  scroll.appendChild(table);
+
+  const details = document.createElement('details');
+  details.className = 'metrics-collapse';
+  details.open = state.metricsOpen;
+  const summary = document.createElement('summary');
+  const label = document.createElement('span'); label.textContent = 'Metrics';
+  const count = document.createElement('span'); count.className = 'count';
+  if (flagCount > 0) count.textContent = flagCount + (flagCount===1 ? ' difference' : ' differences');
+  const chev = document.createElement('span'); chev.className = 'chev'; chev.textContent = '▾';
+  summary.appendChild(label); summary.appendChild(count); summary.appendChild(chev);
+  details.appendChild(summary);
+  details.appendChild(scroll);
+  details.addEventListener('toggle', () => {
+    state.metricsOpen = details.open;
+    try { localStorage.setItem('glyphdiff.metricsOpen', details.open ? '1' : ''); } catch(e){}
+  });
+
+  $('detailBody').appendChild(details);
 }
 
 /* ---------------- summary ---------------- */
@@ -1112,7 +1128,6 @@ function rebuildAll(){
   renderGrid();
   renderDetail();
   renderSummary();
-  $('textToggleCount').textContent = state.chars.length + ' chars';
 }
 
 let debounceTimer;

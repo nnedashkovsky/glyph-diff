@@ -34,7 +34,7 @@ body{
   margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body);
   padding:28px 16px 64px; min-height:100vh;
 }
-.wrap{max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:28px;}
+.wrap{max-width:1440px; margin:0 auto; display:flex; flex-direction:column; gap:28px;}
 h1,h2,h3{margin:0; text-wrap:balance;}
 button{font-family:inherit;}
 :focus-visible{outline:2.5px solid var(--focus); outline-offset:2px;}
@@ -82,22 +82,38 @@ button{font-family:inherit;}
 /* ---- controls ---- */
 [hidden]{display:none !important;}
 .panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow);}
-.controls{display:flex; flex-direction:column; gap:14px;}
-.text-row{display:flex; flex-direction:column; gap:8px;}
+.text-collapse{background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow);}
+.text-collapse summary{list-style:none; cursor:pointer; padding:14px 16px; display:flex; align-items:center; gap:10px; font-weight:600; font-size:14px; color:var(--ink);}
+.text-collapse summary::-webkit-details-marker{display:none;}
+.text-collapse summary .count{font-weight:400; font-size:12.5px; color:var(--ink-faint); font-family:var(--font-mono);}
+.text-collapse summary .chev{margin-left:auto; color:var(--ink-faint); font-size:11px; transition:transform .15s ease;}
+.text-collapse[open] summary .chev{transform:rotate(180deg);}
+.text-collapse[open] summary{border-bottom:1px solid var(--line);}
+.text-row{display:flex; flex-direction:column; gap:8px; padding:16px;}
 .text-row textarea{width:100%; resize:vertical; min-height:64px; font-family:var(--font-mono); font-size:14px; padding:10px 12px; border-radius:9px; border:1px solid var(--line); background:var(--bg); color:var(--ink); line-height:1.5;}
 .presets{display:flex; gap:7px; flex-wrap:wrap;}
 .btn{border:1px solid var(--line); background:var(--panel-2); color:var(--ink); font-size:12.5px; padding:6px 11px; border-radius:20px; cursor:pointer;}
 .btn:hover{border-color:var(--accent-a); color:var(--accent-a);}
-.opt-row{display:flex; flex-wrap:wrap; gap:18px; align-items:center; padding-top:4px; border-top:1px solid var(--line); font-size:13.5px;}
 .seg{display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden;}
 .seg button{border:none; background:var(--bg); color:var(--ink-muted); padding:7px 13px; font-size:13px; cursor:pointer; border-right:1px solid var(--line);}
 .seg button:last-child{border-right:none;}
 .seg button.active{background:var(--accent-a); color:#fff;}
 .opt{display:flex; align-items:center; gap:6px; color:var(--ink-muted); cursor:pointer; user-select:none;}
 .opt input{accent-color:var(--accent-a);}
-.opt-row select, .canvas-toolbar select{font-family:inherit; font-size:13px; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:7px; padding:5px 8px;}
+.canvas-toolbar select, .grid-controls select{font-family:inherit; font-size:13px; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:7px; padding:5px 8px;}
 .slider-wrap{display:flex; align-items:center; gap:8px; color:var(--ink-muted); font-size:13px;}
 .slider-wrap input[type=range]{accent-color:var(--accent-a);}
+.view-opts{display:flex; flex-wrap:wrap; gap:14px; align-items:center; padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--line); font-size:13.5px;}
+
+/* ---- workspace layout ---- */
+.workspace{display:grid; grid-template-columns:minmax(260px,320px) 1fr; gap:20px; align-items:start;}
+@media (max-width:1000px){
+  .workspace{grid-template-columns:1fr;}
+  .sidebar-col{position:static !important;}
+  .sidebar-col .grid{max-height:600px !important;}
+}
+.sidebar-col{position:sticky; top:16px; display:flex; flex-direction:column; gap:10px;}
+.grid-controls{display:flex; flex-wrap:wrap; gap:14px; align-items:center; font-size:13px; color:var(--ink-muted);}
 
 /* ---- grid ---- */
 .gridwrap{display:flex; flex-direction:column; gap:10px;}
@@ -105,6 +121,7 @@ button{font-family:inherit;}
 .gridwrap .label-row h2{font-family:var(--font-display); font-weight:400; font-size:21px;}
 .gridwrap .label-row span{font-size:12.5px; color:var(--ink-faint); font-family:var(--font-mono);}
 .grid{display:flex; flex-wrap:wrap; gap:12px; background:var(--panel-2); border:1px solid var(--line); border-radius:14px; padding:14px; max-height:600px; overflow-y:auto;}
+.sidebar-col .grid{max-height:calc(100vh - 210px);}
 .cell{position:relative; width:116px; height:138px; flex:none; border:1.5px solid var(--line); background:var(--paper); border-radius:11px; cursor:pointer; padding:0; display:flex; flex-direction:column; align-items:stretch; overflow:hidden;}
 .cell:hover{border-color:var(--accent-a);}
 .cell.selected{border-color:var(--accent-a); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent-a) 35%, transparent);}
@@ -204,8 +221,9 @@ footer.note a{color:inherit;}
     </div>
   </div>
 
-  <div id="afterLoad" hidden style="display:flex; flex-direction:column; gap:28px;">
-    <div class="panel controls">
+  <div id="afterLoad" hidden style="display:flex; flex-direction:column; gap:20px;">
+    <details class="text-collapse">
+      <summary>Compare text <span class="count" id="textToggleCount"></span><span class="chev">▾</span></summary>
       <div class="text-row">
         <textarea id="compareText" spellcheck="false" rows="3"></textarea>
         <div class="presets">
@@ -216,79 +234,87 @@ footer.note a{color:inherit;}
           <button class="btn" data-preset="clear">Clear</button>
         </div>
       </div>
-      <div class="opt-row">
-        <div class="seg" id="viewModeSeg">
-          <button data-mode="overlay" class="active">Overlay</button>
-          <button data-mode="blink">Blink</button>
-          <button data-mode="side">Side by side</button>
+    </details>
+
+    <div class="workspace">
+      <div class="sidebar-col">
+        <div class="gridwrap">
+          <div class="label-row">
+            <h2>Characters</h2>
+            <span id="gridCount"></span>
+          </div>
+          <div class="grid-controls">
+            <select id="sortSelect" title="Sort order">
+              <option value="order">Input order</option>
+              <option value="diff">By difference</option>
+            </select>
+            <label class="opt"><input type="checkbox" id="chkOnlyDiff"> diffs only</label>
+          </div>
+          <div class="grid" id="grid" tabindex="0"></div>
         </div>
-        <label class="opt"><input type="checkbox" id="chkGuides" checked> guides</label>
-        <label class="opt"><input type="checkbox" id="chkNodes"> nodes</label>
-        <label class="opt"><input type="checkbox" id="chkOnlyDiff"> diffs only</label>
-        <div class="slider-wrap" id="opacityWrap">
-          opacity
-          <input type="range" id="opacitySlider" min="40" max="100" value="100">
+      </div>
+
+      <div class="detail-col">
+        <div class="panel" id="detailPanel">
+          <div class="view-opts">
+            <div class="seg" id="viewModeSeg">
+              <button data-mode="overlay" class="active">Overlay</button>
+              <button data-mode="blink">Blink</button>
+              <button data-mode="side">Side by side</button>
+            </div>
+            <label class="opt"><input type="checkbox" id="chkGuides" checked> guides</label>
+            <label class="opt"><input type="checkbox" id="chkNodes"> nodes</label>
+            <div class="slider-wrap" id="opacityWrap">
+              opacity
+              <input type="range" id="opacitySlider" min="40" max="100" value="100">
+            </div>
+            <div class="slider-wrap" id="blinkWrap" hidden>
+              speed
+              <input type="range" id="blinkSlider" min="150" max="1200" value="500" step="50">
+            </div>
+          </div>
+          <div class="detail-head">
+            <span class="detail-char" id="dChar">A</span>
+            <span class="detail-cp" id="dCp">U+0041</span>
+            <div class="diffstat">
+              <div class="num" id="dDiffNum">—</div>
+              <div class="cap">outline difference</div>
+            </div>
+          </div>
+          <div class="detail-fonts" id="detailFonts"></div>
+          <div class="canvas-toolbar">
+            <div class="zoom-btns">
+              <button id="zoomOut" title="Zoom out">−</button>
+              <button id="zoomReset" title="Reset view">⊙</button>
+              <button id="zoomIn" title="Zoom in">+</button>
+            </div>
+            <div class="slider-wrap" title="Which edge or center of each glyph's own ink to align, per axis — pin an edge to isolate differences on the opposite side">
+              align
+              <select id="alignH">
+                <option value="origin">natural</option>
+                <option value="left">left</option>
+                <option value="center" selected>center</option>
+                <option value="right">right</option>
+              </select>
+              <select id="alignV">
+                <option value="origin">baseline</option>
+                <option value="top">top</option>
+                <option value="middle" selected>middle</option>
+                <option value="bottom">bottom</option>
+              </select>
+            </div>
+            <div class="legend">
+              <span><i style="background:var(--accent-a)"></i>only <span id="legA">A</span></span>
+              <span><i style="background:var(--accent-b)"></i>only <span id="legB">B</span></span>
+              <span><i style="background:#2a2330"></i>both</span>
+            </div>
+          </div>
+          <div class="detail" id="detailBody"></div>
         </div>
-        <div class="slider-wrap" id="blinkWrap" hidden>
-          speed
-          <input type="range" id="blinkSlider" min="150" max="1200" value="500" step="50">
-        </div>
-        <select id="sortSelect" title="Sort order">
-          <option value="order">Input order</option>
-          <option value="diff">By difference</option>
-        </select>
+
+        <div class="panel summary" id="summaryBar" style="margin-top:20px;"></div>
       </div>
     </div>
-
-    <div class="gridwrap">
-      <div class="label-row">
-        <h2>Characters</h2>
-        <span id="gridCount"></span>
-      </div>
-      <div class="grid" id="grid" tabindex="0"></div>
-    </div>
-
-    <div class="panel" id="detailPanel">
-      <div class="detail-head">
-        <span class="detail-char" id="dChar">A</span>
-        <span class="detail-cp" id="dCp">U+0041</span>
-        <div class="diffstat">
-          <div class="num" id="dDiffNum">—</div>
-          <div class="cap">outline difference</div>
-        </div>
-      </div>
-      <div class="detail-fonts" id="detailFonts"></div>
-      <div class="canvas-toolbar">
-        <div class="zoom-btns">
-          <button id="zoomOut" title="Zoom out">−</button>
-          <button id="zoomReset" title="Reset view">⊙</button>
-          <button id="zoomIn" title="Zoom in">+</button>
-        </div>
-        <div class="slider-wrap" title="Which edge or center of each glyph's own ink to align, per axis — pin an edge to isolate differences on the opposite side">
-          align
-          <select id="alignH">
-            <option value="origin">natural</option>
-            <option value="left">left</option>
-            <option value="center" selected>center</option>
-            <option value="right">right</option>
-          </select>
-          <select id="alignV">
-            <option value="origin">baseline</option>
-            <option value="top">top</option>
-            <option value="middle" selected>middle</option>
-            <option value="bottom">bottom</option>
-          </select>
-        </div>
-        <div class="legend">
-          <span><i style="background:var(--accent-a)"></i>only <span id="legA">A</span></span>
-          <span><i style="background:var(--accent-b)"></i>only <span id="legB">B</span></span>
-          <span><i style="background:#2a2330"></i>both</span>
-        </div>
-      </div>
-      <div class="detail" id="detailBody"></div>
-    </div>
-
-    <div class="panel summary" id="summaryBar"></div>
   </div>
 
   <div class="empty-hint" id="preHint">Load both fonts to start comparing.</div>
@@ -1086,6 +1112,7 @@ function rebuildAll(){
   renderGrid();
   renderDetail();
   renderSummary();
+  $('textToggleCount').textContent = state.chars.length + ' chars';
 }
 
 let debounceTimer;

@@ -222,6 +222,7 @@ footer.note a{color:inherit;}
           <button data-mode="blink">Blink</button>
           <button data-mode="side">Side by side</button>
         </div>
+        <label class="opt" title="Align each glyph on its own ink center instead of its type-design origin, so similar shapes overlap regardless of sidebearings"><input type="checkbox" id="chkCenter" checked> center by shape</label>
         <label class="opt"><input type="checkbox" id="chkGuides" checked> guides</label>
         <label class="opt"><input type="checkbox" id="chkNodes"> nodes</label>
         <label class="opt"><input type="checkbox" id="chkOnlyDiff"> diffs only</label>
@@ -297,6 +298,7 @@ const state = {
   selectedChar: null,
   viewMode: 'overlay',
   showGuides: true,
+  centerByShape: true,
   showNodes: false,
   onlyDiff: false,
   opacity: 1,
@@ -602,12 +604,13 @@ function getEntry(ch){
   return e;
 }
 
-function rasterMask(d, left, top, right, bottom, size){
+function rasterMask(d, left, top, right, bottom, size, offX=0, offY=0){
   const c = document.createElement('canvas'); c.width=size; c.height=size;
   const ctx = c.getContext('2d');
   ctx.save();
   ctx.scale(size/(right-left||1), size/(bottom-top||1));
   ctx.translate(-left, -top);
+  ctx.translate(-offX, -offY);
   ctx.fillStyle = '#000';
   if (d) ctx.fill(new Path2D(d));
   ctx.restore();
@@ -617,17 +620,32 @@ function rasterMask(d, left, top, right, bottom, size){
   return mask;
 }
 
+function fontOffset(entry, centered){
+  if (!centered || !entry || entry.missing || !entry.contours) return {x:0, y:0};
+  return {x:(entry.bbox.minX+entry.bbox.maxX)/2, y:(entry.bbox.minY+entry.bbox.maxY)/2};
+}
+
 function computeDiffScore(a,b){
   if (!a || !b || a.missing || b.missing) return null;
   if (a.contours===0 && b.contours===0) return 0;
   const pad = 20, size = 128;
-  const g = state.globalGuides;
-  const left = Math.min(0, a.bbox.minX, b.bbox.minX) - pad;
-  const right = Math.max(a.advance.norm, b.advance.norm, a.bbox.maxX, b.bbox.maxX) + pad;
-  const top = Math.min(g.ascY, a.bbox.minY, b.bbox.minY) - pad;
-  const bottom = Math.max(g.descY, a.bbox.maxY, b.bbox.maxY) + pad;
-  const maskA = rasterMask(a.d, left, top, right, bottom, size);
-  const maskB = rasterMask(b.d, left, top, right, bottom, size);
+  const centered = state.centerByShape;
+  const offA = fontOffset(a, centered), offB = fontOffset(b, centered);
+  let left, right, top, bottom;
+  if (centered){
+    const aMinX=a.bbox.minX-offA.x, aMaxX=a.bbox.maxX-offA.x, aMinY=a.bbox.minY-offA.y, aMaxY=a.bbox.maxY-offA.y;
+    const bMinX=b.bbox.minX-offB.x, bMaxX=b.bbox.maxX-offB.x, bMinY=b.bbox.minY-offB.y, bMaxY=b.bbox.maxY-offB.y;
+    left = Math.min(aMinX,bMinX)-pad; right = Math.max(aMaxX,bMaxX)+pad;
+    top = Math.min(aMinY,bMinY)-pad; bottom = Math.max(aMaxY,bMaxY)+pad;
+  } else {
+    const g = state.globalGuides;
+    left = Math.min(0, a.bbox.minX, b.bbox.minX) - pad;
+    right = Math.max(a.advance.norm, b.advance.norm, a.bbox.maxX, b.bbox.maxX) + pad;
+    top = Math.min(g.ascY, a.bbox.minY, b.bbox.minY) - pad;
+    bottom = Math.max(g.descY, a.bbox.maxY, b.bbox.maxY) + pad;
+  }
+  const maskA = rasterMask(a.d, left, top, right, bottom, size, offA.x, offA.y);
+  const maskB = rasterMask(b.d, left, top, right, bottom, size, offB.x, offB.y);
   let inter=0, union=0;
   for (let i=0;i<maskA.length;i++){ const x=maskA[i], y=maskB[i]; if (x||y) union++; if (x&&y) inter++; }
   return union===0 ? 0 : 1 - inter/union;
@@ -683,11 +701,20 @@ function computeInkFrame(){
   return {minY, maxY};
 }
 
-function unionBox(a,b,pad){
+function unionBox(a,b,pad,centered){
   const f = state.inkFrame;
-  const xs=[0], ys=[0,f.minY,f.maxY];
-  if (a && !a.missing){ xs.push(a.bbox.minX,a.bbox.maxX,a.advance.norm); ys.push(a.bbox.minY,a.bbox.maxY); }
-  if (b && !b.missing){ xs.push(b.bbox.minX,b.bbox.maxX,b.advance.norm); ys.push(b.bbox.minY,b.bbox.maxY); }
+  const xs=[0], ys = centered ? [0] : [0,f.minY,f.maxY];
+  const offA = fontOffset(a, centered), offB = fontOffset(b, centered);
+  if (a && !a.missing){
+    xs.push(a.bbox.minX-offA.x, a.bbox.maxX-offA.x);
+    ys.push(a.bbox.minY-offA.y, a.bbox.maxY-offA.y);
+    if (!centered) xs.push(a.advance.norm);
+  }
+  if (b && !b.missing){
+    xs.push(b.bbox.minX-offB.x, b.bbox.maxX-offB.x);
+    ys.push(b.bbox.minY-offB.y, b.bbox.maxY-offB.y);
+    if (!centered) xs.push(b.advance.norm);
+  }
   const minX=Math.min(...xs)-pad, maxX=Math.max(...xs)+pad;
   const minY=Math.min(...ys)-pad, maxY=Math.max(...ys)+pad;
   return {minX,minY,width:Math.max(maxX-minX,1),height:Math.max(maxY-minY,1)};
@@ -704,11 +731,12 @@ function appendNodes(parent, entry, color){
 }
 
 function buildGlyphSVG(a, b, opts){
-  const box = unionBox(a,b,opts.pad);
+  const centered = !!opts.centered;
+  const box = unionBox(a,b,opts.pad,centered);
   const svg = svgEl('svg',{viewBox:`${box.minX} ${box.minY} ${box.width} ${box.height}`, class:'glyph-svg'});
   svg.appendChild(svgEl('rect',{x:box.minX,y:box.minY,width:box.width,height:box.height,fill:'#ffffff'}));
 
-  if (opts.showGuides){
+  if (opts.showGuides && !centered){
     const g = svgEl('g',{});
     const gc='#9c9284', w=box.width;
     g.appendChild(svgEl('line',{x1:box.minX,x2:box.minX+w,y1:0,y2:0,stroke:gc,'stroke-width':1.2}));
@@ -721,19 +749,38 @@ function buildGlyphSVG(a, b, opts){
   const showA = opts.mode !== 'sideB';
   const showB = opts.mode !== 'sideA';
   const blend = opts.mode === 'overlay';
+  const offA = fontOffset(a, centered), offB = fontOffset(b, centered);
   const inkG = svgEl('g', blend ? {style:'isolation:isolate'} : {});
   let pathA=null, pathB=null;
-  if (showA && a && !a.missing && a.d) pathA = inkG.appendChild(svgEl('path',{d:a.d, fill:COLOR_A, 'fill-opacity':opts.opacity, style: blend?'mix-blend-mode:multiply':''}));
-  if (showB && b && !b.missing && b.d) pathB = inkG.appendChild(svgEl('path',{d:b.d, fill:COLOR_B, 'fill-opacity':opts.opacity, style: blend?'mix-blend-mode:multiply':''}));
+  if (showA && a && !a.missing && a.d){
+    const gA = svgEl('g', centered ? {transform:`translate(${-offA.x},${-offA.y})`} : {});
+    pathA = svgEl('path',{d:a.d, fill:COLOR_A, 'fill-opacity':opts.opacity, style: blend?'mix-blend-mode:multiply':''});
+    gA.appendChild(pathA);
+    inkG.appendChild(gA);
+  }
+  if (showB && b && !b.missing && b.d){
+    const gB = svgEl('g', centered ? {transform:`translate(${-offB.x},${-offB.y})`} : {});
+    pathB = svgEl('path',{d:b.d, fill:COLOR_B, 'fill-opacity':opts.opacity, style: blend?'mix-blend-mode:multiply':''});
+    gB.appendChild(pathB);
+    inkG.appendChild(gB);
+  }
   zoomG.appendChild(inkG);
 
-  if (opts.showTicks){
+  if (opts.showTicks && !centered){
     if (showA && a && !a.missing) zoomG.appendChild(svgEl('line',{x1:a.advance.norm,x2:a.advance.norm,y1:10,y2:30,stroke:COLOR_A,'stroke-width':3}));
     if (showB && b && !b.missing) zoomG.appendChild(svgEl('line',{x1:b.advance.norm,x2:b.advance.norm,y1:34,y2:54,stroke:COLOR_B,'stroke-width':3}));
   }
   if (opts.showNodes){
-    if (showA && a && !a.missing) appendNodes(zoomG, a, COLOR_A);
-    if (showB && b && !b.missing) appendNodes(zoomG, b, COLOR_B);
+    if (showA && a && !a.missing){
+      const nA = svgEl('g', centered ? {transform:`translate(${-offA.x},${-offA.y})`} : {});
+      appendNodes(nA, a, COLOR_A);
+      zoomG.appendChild(nA);
+    }
+    if (showB && b && !b.missing){
+      const nB = svgEl('g', centered ? {transform:`translate(${-offB.x},${-offB.y})`} : {});
+      appendNodes(nB, b, COLOR_B);
+      zoomG.appendChild(nB);
+    }
   }
   svg.appendChild(zoomG);
 
@@ -793,7 +840,7 @@ function buildCell(entry){
   const cell = document.createElement('button');
   cell.type='button'; cell.className='cell';
   if (entry.ch === state.selectedChar) cell.classList.add('selected');
-  const svg = buildGlyphSVG(entry.a, entry.b, {mode:'overlay', showGuides:false, showNodes:false, showTicks:false, opacity:1, pad:50});
+  const svg = buildGlyphSVG(entry.a, entry.b, {mode:'overlay', showGuides:false, showNodes:false, showTicks:false, opacity:1, pad:50, centered:state.centerByShape});
   svg.style.cursor='pointer';
   cell.appendChild(svg);
   const label = document.createElement('span'); label.className='cell-label'; label.textContent = entry.ch;
@@ -885,7 +932,7 @@ function renderDetail(){
       const l = document.createElement('div'); l.className='side-label'; l.style.color=color; l.textContent=fontLabel(slot);
       col.appendChild(l);
       const frame = document.createElement('div'); frame.className='paper-sheet';
-      frame.appendChild(buildGlyphSVG(entry.a, entry.b, {mode, showGuides:state.showGuides, showNodes:state.showNodes, showTicks:true, opacity:1, pad:80, interactive:true}));
+      frame.appendChild(buildGlyphSVG(entry.a, entry.b, {mode, showGuides:state.showGuides, showNodes:state.showNodes, showTicks:true, opacity:1, pad:80, interactive:true, centered:state.centerByShape}));
       col.appendChild(frame);
       gridS.appendChild(col);
     });
@@ -895,7 +942,7 @@ function renderDetail(){
     const frame = document.createElement('div'); frame.className='canvas-frame';
     const sheet = document.createElement('div'); sheet.className='paper-sheet';
     const mode = state.viewMode === 'blink' ? 'blink' : 'overlay';
-    const svg = buildGlyphSVG(entry.a, entry.b, {mode, showGuides:state.showGuides, showNodes:state.showNodes, showTicks:true, opacity: state.viewMode==='blink'?1:state.opacity, pad:80, interactive:true});
+    const svg = buildGlyphSVG(entry.a, entry.b, {mode, showGuides:state.showGuides, showNodes:state.showNodes, showTicks:true, opacity: state.viewMode==='blink'?1:state.opacity, pad:80, interactive:true, centered:state.centerByShape});
     sheet.appendChild(svg);
     frame.appendChild(sheet);
     body.appendChild(frame);
@@ -1072,6 +1119,7 @@ function init(){
     });
   });
 
+  $('chkCenter').addEventListener('change', e => { state.centerByShape = e.target.checked; refreshComparison(); });
   $('chkGuides').addEventListener('change', e => { state.showGuides = e.target.checked; renderDetail(); });
   $('chkNodes').addEventListener('change', e => { state.showNodes = e.target.checked; renderDetail(); });
   $('chkOnlyDiff').addEventListener('change', e => { state.onlyDiff = e.target.checked; renderGrid(); });
